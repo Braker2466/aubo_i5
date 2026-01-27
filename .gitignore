@@ -1,0 +1,29 @@
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.venv/
+venv/
+.env
+.DS_Store
+*.log
+*.tmp
+
+# Jupyter
+.ipynb_checkpoints/
+
+# VSCode
+.vscode/
+
+# Build / dist
+build/
+dist/
+*.egg-info/
+
+# Large data / weights (按需)
+data/
+datasets/
+*.onnx
+*.pth
+*.pt
+*.engine
