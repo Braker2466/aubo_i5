@@ -183,20 +183,39 @@ class Aubo_Robot(Auboi5Robot):
                                   -(65 / 360.0) * 2 * np.pi, -(0 / 360.0) * 2 * np.pi,
                                   -(90 / 360.0) * 2 * np.pi, -(90 / 360.0) * 2 * np.pi]
         
-        self.start_joint_config = [-(46 / 360.0) * 2 * np.pi, -(31 / 360.0) * 2 * np.pi,
-                                  -(100 / 360.0) * 2 * np.pi, -(-20 / 360.0) * 2 * np.pi,
+        self.start_joint_config = [-(46 / 360.0) * 2 * np.pi, -(32 / 360.0) * 2 * np.pi,
+                                  -(104 / 360.0) * 2 * np.pi, -(-16 / 360.0) * 2 * np.pi,
                                   -(90 / 360.0) * 2 * np.pi, -(45 / 360.0) * 2 * np.pi]
         self.end_joint_config = [-(76 / 360.0) * 2 * np.pi, -(-18 / 360.0) * 2 * np.pi,
                                   -(56 / 360.0) * 2 * np.pi, -(-14 / 360.0) * 2 * np.pi,
                                   -(90 / 360.0) * 2 * np.pi, -(75 / 360.0) * 2 * np.pi]
-        self.middle_joint_config = [-(63 / 360.0) * 2 * np.pi, -(18 / 360.0) * 2 * np.pi,
-                                  -(93 / 360.0) * 2 * np.pi, -(-14 / 360.0) * 2 * np.pi,
+        self.middle_joint_config = [-(63 / 360.0) * 2 * np.pi, -(20 / 360.0) * 2 * np.pi,
+                                  -(98 / 360.0) * 2 * np.pi, -(-10 / 360.0) * 2 * np.pi,
                                   -(90 / 360.0) * 2 * np.pi, -(62 / 360.0) * 2 * np.pi]
 
         self.test_joint_config = [-(90 / 360.0) * 2 * np.pi, -(0 / 360.0) * 2 * np.pi,
                                   -(90 / 360.0) * 2 * np.pi, -(10 / 360.0) * 2 * np.pi,
                                   -(90 / 360.0) * 2 * np.pi, -(90 / 360.0) * 2 * np.pi]
         
+        self.cam1_joint_config = [-(55 / 360.0) * 2 * np.pi, -(2.7 / 360.0) * 2 * np.pi,
+                                  -(82 / 360.0) * 2 * np.pi, -(-18 / 360.0) * 2 * np.pi,
+                                  -(103 / 360.0) * 2 * np.pi, -(53 / 360.0) * 2 * np.pi]
+        
+        self.cam2_joint_config = [-(91 / 360.0) * 2 * np.pi, -(26 / 360.0) * 2 * np.pi,
+                                  -(114 / 360.0) * 2 * np.pi, -(0 / 360.0) * 2 * np.pi,
+                                  -(62 / 360.0) * 2 * np.pi, -(91 / 360.0) * 2 * np.pi]
+        
+        self.cam5_joint_config = [-(66 / 360.0) * 2 * np.pi, -(14 / 360.0) * 2 * np.pi,
+                                  -(94 / 360.0) * 2 * np.pi, -(-8 / 360.0) * 2 * np.pi,
+                                  -(90 / 360.0) * 2 * np.pi, -(65 / 360.0) * 2 * np.pi]
+        
+        self.cam3_joint_config = [-(74 / 360.0) * 2 * np.pi, -(2 / 360.0) * 2 * np.pi,
+                                  -(86 / 360.0) * 2 * np.pi, -(-20 / 360.0) * 2 * np.pi,
+                                  -(78 / 360.0) * 2 * np.pi, -(75 / 360.0) * 2 * np.pi]
+        
+        self.cam4_joint_config = [-(50 / 360.0) * 2 * np.pi, -(14 / 360.0) * 2 * np.pi,
+                                  -(95 / 360.0) * 2 * np.pi, -(-0 / 360.0) * 2 * np.pi,
+                                  -(111 / 360.0) * 2 * np.pi, -(57 / 360.0) * 2 * np.pi]
 
     def get_info(self):
         end_line_acc = self.get_end_max_line_acc()
@@ -256,6 +275,13 @@ class Aubo_Robot(Auboi5Robot):
     def move_around(self):
         self.move_line(self.start_joint_config)
         self.move_line(self.middle_joint_config)
+    
+    def go_collect(self): #制作数据集用的
+        self.move_line(self.cam3_joint_config)
+        self.move_line(self.cam2_joint_config)
+        self.move_line(self.cam1_joint_config)
+        self.move_line(self.cam4_joint_config)
+        self.move_line(self.cam5_joint_config)
 
     def restartReal(self):
         self.go_home()

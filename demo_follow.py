@@ -8,6 +8,33 @@ import cv2
 from Aubo_Robot import Aubo_Robot
 from UDPReceiver import UDPTrackingReceiver
 from realsenseD435 import Camera
+import random
+
+def random_patrol(robot, N):
+    """
+    按随机顺序遍历五个点位，每轮顺序不同，共执行 N 轮
+    """
+
+    # 所有目标点放入列表
+    joint_list = [
+        robot.cam1_joint_config,
+        robot.cam2_joint_config,
+        robot.cam3_joint_config,
+        robot.cam4_joint_config,
+        robot.cam5_joint_config
+    ]
+
+    for i in range(N):
+        print(f"===== 第 {i+1} 轮开始 =====")
+
+        # 每一轮打乱顺序
+        random.shuffle(joint_list)
+
+        for joint in joint_list:
+            robot.move_line(joint)
+
+        print(f"===== 第 {i+1} 轮结束 =====\n")
+
 
 def click2target(robot,camera):
 
@@ -107,10 +134,16 @@ if __name__ == "__main__":
     # # 设置关节最大加速度
     # robot.set_joint_maxvelc((1, 1, 1, 1, 1, 1))
     robot.get_info()
-
+    # random_patrol(robot, N=5)
     while True:
         robot.move_around()
+        # robot.move_line(robot.cam1_joint_config)
+        # robot.move_line(robot.cam2_joint_config)
+        # robot.move_line(robot.cam5_joint_config)
+        # robot.move_line(robot.cam3_joint_config)
+        # robot.move_line(robot.cam4_joint_config)
     # robot.go_test()
+
     # click2target(robot,camera)
     # follow_target()
 
