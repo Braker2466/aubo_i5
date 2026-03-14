@@ -135,14 +135,10 @@ if __name__ == "__main__":
     # robot.set_joint_maxvelc((1, 1, 1, 1, 1, 1))
     robot.get_info()
     # random_patrol(robot, N=5)
-    while True:
-        robot.move_around()
-        # robot.move_line(robot.cam1_joint_config)
-        # robot.move_line(robot.cam2_joint_config)
-        # robot.move_line(robot.cam5_joint_config)
-        # robot.move_line(robot.cam3_joint_config)
-        # robot.move_line(robot.cam4_joint_config)
+    # while True:
+    #     robot.move_around()
     # robot.go_test()
+    robot.go_home()
 
     # click2target(robot,camera)
     # follow_target()

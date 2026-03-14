@@ -140,7 +140,7 @@ def compute_step_stable_improve(delta,
 
 
 class Aubo_Robot(Auboi5Robot):
-    def __init__(self, robot_host_ip="192.168.65.100", robot_port=8899,is_connect=True ,workspace_limits=None,
+    def __init__(self, robot_host_ip="192.168.1.40", robot_port=8899,is_connect=True ,workspace_limits=None, #
                  is_use_jaw=False, is_use_camera=False):
         super().__init__()
         # Init varibles
