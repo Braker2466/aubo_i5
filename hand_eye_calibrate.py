@@ -109,6 +109,143 @@ def camera_calibrate(N,iamges_path):
     return rvecs, tvecs
 
 
+def camera_calibrate_2(N, iamges_path):
+    print("++++++++++开始相机标定++++++++++++++")
+
+    # 角点的个数以及棋盘格间距
+    XX = 11  # 标定板长度方向内角点个数
+    YY = 8   # 标定板宽度方向内角点个数
+    L = 0.015  # 棋盘格单格边长，单位 m
+
+    # 保存角点可视化图片的目录
+    save_vis_dir = os.path.join(iamges_path, "corner_vis")
+    os.makedirs(save_vis_dir, exist_ok=True)
+
+    # 亚像素角点停止准则
+    criteria = (cv2.TERM_CRITERIA_MAX_ITER | cv2.TERM_CRITERIA_EPS, 30, 0.001)
+
+    # 构造棋盘格世界坐标
+    objp = np.zeros((XX * YY, 3), np.float32)
+    objp[:, :2] = np.mgrid[0:XX, 0:YY].T.reshape(-1, 2)
+    objp = L * objp
+
+    obj_points = []  # 3D点
+    img_points = []  # 2D点
+
+    size = None
+    valid_image_indices = []
+
+    for i in range(0, N):
+        image = f"{iamges_path}/images{i}.jpg"
+        print(f"\n正在处理第{i}张图片：{image}")
+
+        if not os.path.exists(image):
+            print("图片不存在，跳过")
+            continue
+
+        img = cv2.imread(image)
+        if img is None:
+            print("图片读取失败，跳过")
+            continue
+
+        print(f"图像大小：{img.shape}")
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        size = gray.shape[::-1]
+
+        # 查找棋盘格角点
+        ret, corners = cv2.findChessboardCorners(
+            gray, (XX, YY), None
+        )
+
+        vis = img.copy()
+
+        if ret:
+            # 亚像素优化
+            corners2 = cv2.cornerSubPix(gray, corners, (5, 5), (-1, -1), criteria)
+
+            print(f"左上角点：{corners2[0, 0]}")
+            print(f"右下角点：{corners2[-1, -1]}")
+
+            # 绘制角点
+            cv2.drawChessboardCorners(vis, (XX, YY), corners2, ret)
+
+            # 加入标定数据
+            obj_points.append(objp)
+            img_points.append(corners2)
+            valid_image_indices.append(i)
+
+            status_text = "Corners: OK"
+            status_color = (0, 255, 0)
+
+        else:
+            print("未检测到棋盘格角点")
+            status_text = "Corners: FAIL"
+            status_color = (0, 0, 255)
+
+        # 叠加显示信息
+        # cv2.putText(vis, f"Image: images{i}.jpg", (20, 30),
+        #             cv2.FONT_HERSHEY_SIMPLEX, 0.8, (255, 0, 0), 2)
+        # cv2.putText(vis, status_text, (20, 65),
+        #             cv2.FONT_HERSHEY_SIMPLEX, 0.8, status_color, 2)
+        # cv2.putText(vis, "Enter: next | s: save | Esc: quit", (20, 100),
+        #             cv2.FONT_HERSHEY_SIMPLEX, 0.7, (255, 0, 0), 2)
+
+        # 自适应缩放显示
+        h, w = vis.shape[:2]
+        scale = min(1400 / w, 900 / h, 1.0)
+        show_img = cv2.resize(vis, (int(w * scale), int(h * scale)))
+
+        cv2.imshow("Chessboard", show_img)
+
+        while True:
+            key = cv2.waitKey(0) & 0xFF
+
+            # Enter -> 下一张
+            if key == 13:
+                save_name = f"images{i}_corners.png"
+                save_path = os.path.join(save_vis_dir, save_name)
+                cv2.imwrite(save_path, vis)
+                print(f"已保存角点可视化图：{save_path}")
+                print("进入下一张")
+                break
+
+
+            # Esc -> 提前退出
+            elif key == 27:
+                print("用户终止相机标定图片浏览")
+                cv2.destroyAllWindows()
+
+                if len(img_points) < 3:
+                    raise ValueError("有效标定图片数量不足，至少需要3张以上成功检测角点的图片")
+
+                ret_calib, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(
+                    obj_points, img_points, size, None, None
+                )
+
+                print("内参矩阵:\n", mtx)
+                print("畸变系数:\n", dist)
+                print("有效图像编号:", valid_image_indices)
+                print("++++++++++相机标定完成++++++++++++++")
+                return rvecs, tvecs
+
+    cv2.destroyAllWindows()
+
+    if len(img_points) < 3:
+        raise ValueError("有效标定图片数量不足，至少需要3张以上成功检测角点的图片")
+
+    # 相机标定
+    ret_calib, mtx, dist, rvecs, tvecs = cv2.calibrateCamera(
+        obj_points, img_points, size, None, None
+    )
+
+    print("内参矩阵:\n", mtx)
+    print("畸变系数:\n", dist)
+    print("有效图像编号:", valid_image_indices)
+    print("++++++++++相机标定完成++++++++++++++")
+
+    return rvecs, tvecs
+
+
 def process_arm_pose(arm_pose_file):
     """处理机械臂的pose文件。 采集数据时， 每行保存一个机械臂的pose信息， 该pose与拍摄的图片是对应的。
     pose信息用6个数标识， 【x,y,z,Rx, Ry, Rz】. 需要把这个pose信息用旋转矩阵表示。rx, ry, rz为弧度值"""
@@ -126,7 +263,7 @@ def process_arm_pose(arm_pose_file):
 
 
 def hand_eye_calibrate():
-    rvecs, tvecs = camera_calibrate(N,iamges_path=iamges_path)
+    rvecs, tvecs = camera_calibrate_2(N,iamges_path=iamges_path)
     R_arm, t_arm = process_arm_pose(arm_pose_file=arm_pose_file)
 
     R, t = cv2.calibrateHandEye(R_arm, t_arm, rvecs, tvecs, cv2.CALIB_HAND_EYE_TSAI)
@@ -143,6 +280,8 @@ if __name__ == "__main__":
     print(t)
 
 '''
+
+
 cam_intrinsics = np.array([607.005, 0, 319.980, 0, 607.304, 250.081, 0, 0, 1])
 
 ++++++++++相机标定完成++++++++++++++
