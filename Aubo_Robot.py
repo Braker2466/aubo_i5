@@ -445,12 +445,7 @@ class Aubo_Robot(Auboi5Robot):
         - 不抓取
         - 不下探
         """
-        # ===== 1. 工作空间合法性判定（拒绝非法） =====
-        for i in range(3):
-            low, high = self.workspace_limits[i]
-            if not (low <= position[i] <= high):
-                print(f"[Reject] Target out of workspace on axis {i}: {position[i]:.3f}")
-                return False
+
 
         # ===== 2. 平面朝下对准姿态 =====
         # Z轴向下，绕Z旋转 yaw
@@ -466,6 +461,13 @@ class Aubo_Robot(Auboi5Robot):
         # ===== 3. 可选高度偏移（对准而不贴近） =====
         target_position = position.copy()
         target_position[2] += z_offset
+
+        # ===== 1. 工作空间合法性判定（拒绝非法） =====
+        for i in range(3):
+            low, high = self.workspace_limits[i]
+            if not (low <= target_position[i] <= high):
+                print(f"[Reject] Target out of workspace on axis {i}: {target_position[i]:.3f}")
+                return False
 
         print(
             "Aligning to target: "

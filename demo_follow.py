@@ -61,7 +61,7 @@ def click2target(robot,camera):
             target_pos = robot.compute_target2base(click_point)
             print("target_pos:", target_pos)
 
-            robot.align_to_target(target_pos, z_offset=0.3)
+            robot.align_to_target(target_pos, z_offset=0.4)
 
     # Callback function for clicking on OpenCV window
     camera_color_img, camera_depth_img = camera.get_data()
@@ -125,6 +125,7 @@ def follow_target():
 
 if __name__ == "__main__":
     Aubo_Robot.initialize()
+    camera = Camera(width=1280,height=720,fps=30)  # 深度相机
     robot = Aubo_Robot(is_use_camera=False,is_use_jaw=False)
     # camera = Camera(width=640,height=480,fps=30,default_depth=0.3)  # 深度相机
     robot.set_end_max_line_velc(0.02)

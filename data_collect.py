@@ -10,7 +10,7 @@ from Aubo_Robot import Aubo_Robot
 count = 0
 
 
-image_save_path = "./collect_data4/"
+image_save_path = "./collect_data5/"
 
 
 def data_collect():
