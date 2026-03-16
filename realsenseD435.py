@@ -4,7 +4,7 @@ import cv2
 
 class Camera(object):
 
-    def __init__(self,width=640,height=480,fps=15,default_depth=None):
+    def __init__(self,width=1280,height=720,fps=15,default_depth=None):
         self.im_height = height
         self.im_width = width
         self.fps = fps

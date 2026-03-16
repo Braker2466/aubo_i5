@@ -10,7 +10,7 @@ from Aubo_Robot import Aubo_Robot
 count = 0
 
 
-image_save_path = "./collect_data3/"
+image_save_path = "./collect_data4/"
 
 
 def data_collect():
@@ -91,7 +91,7 @@ if __name__ == "__main__":
     Aubo_Robot.initialize()
 
     robot = Aubo_Robot(is_use_jaw=False)
-    camera = Camera()
+    camera = Camera(width=1280,height=720,fps=30)
 
     robot.go_home()
 
