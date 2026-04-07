@@ -191,8 +191,9 @@ def capture_waypoints(json_path="waypoints.json", ip="localhost", port=8899):
 
     robot = None
     try:
+        Auboi5Robot.initialize()
         robot = connect_robot(ip, port)
-        robot.robot_startup()
+        # robot.robot_startup()
 
         while True:
             cmd = input("请输入命令[s/l/r/p/q]: ").strip().lower()
@@ -250,7 +251,8 @@ def capture_waypoints(json_path="waypoints.json", ip="localhost", port=8899):
         print(f"程序异常: {e}")
     finally:
         if robot is not None:
-            safe_shutdown_robot(robot)
+            # safe_shutdown_robot(robot)
+            print("collet_end")
 
 
 # =========================
@@ -307,27 +309,40 @@ class RobotPointExecutor:
         return self.robot.move_to_target_in_cartesian(tuple(pos), tuple(rpy_deg))
 
     # ---------- 姿态调整 ----------
-    def adjust_pose_rpy(self, delta_rpy_deg):
+    def adjust_pose_rpy_at_point(self, name, delta_rpy_deg, use_recorded_pos=True):
         """
-        在当前位置上做姿态增量调整，位置保持不变。
-        delta_rpy_deg: (d_rx_deg, d_ry_deg, d_rz_deg)
+        基于记录点位的姿态做增量调整。
+
+        参数：
+        - name: JSON 中记录的点位名
+        - delta_rpy_deg: 在该记录点位姿态基础上的欧拉角增量 (deg)
+        - use_recorded_pos: True 表示使用该记录点位的 pos；
+                            False 表示使用当前位置的 pos，仅借用记录点位的姿态作为基准
+
+        说明：
+        - 与“基于当前位置姿态调整”不同，这里以 JSON 中点位的 ori 为基准。
+        - 逆解初值优先使用该记录点位的 joint，更贴近你采集时的构型。
         """
-        wp = self.robot.get_current_waypoint()
-        if wp is None:
-            raise RuntimeError("获取当前 waypoint 失败")
+        p = self.get_point(name)
+        base_joint = tuple(p["joint"])
+        base_ori = tuple(p["ori"])
 
-        current_joint = tuple(wp["joint"])
-        current_pos = tuple(wp["pos"])
-        current_ori = tuple(wp["ori"])
+        if use_recorded_pos:
+            target_pos = tuple(p["pos"])
+        else:
+            current_wp = self.robot.get_current_waypoint()
+            if current_wp is None:
+                raise RuntimeError("获取当前 waypoint 失败")
+            target_pos = tuple(current_wp["pos"])
 
-        current_rpy_rad = self.robot.quaternion_to_rpy(current_ori)
-        if current_rpy_rad is None:
-            raise RuntimeError("四元数转欧拉角失败")
+        base_rpy_rad = self.robot.quaternion_to_rpy(base_ori)
+        if base_rpy_rad is None:
+            raise RuntimeError("记录点位四元数转欧拉角失败")
 
         target_rpy_rad = (
-            current_rpy_rad[0] + math.radians(delta_rpy_deg[0]),
-            current_rpy_rad[1] + math.radians(delta_rpy_deg[1]),
-            current_rpy_rad[2] + math.radians(delta_rpy_deg[2]),
+            base_rpy_rad[0] + math.radians(delta_rpy_deg[0]),
+            base_rpy_rad[1] + math.radians(delta_rpy_deg[1]),
+            base_rpy_rad[2] + math.radians(delta_rpy_deg[2]),
         )
 
         target_ori = self.robot.rpy_to_quaternion(target_rpy_rad)
@@ -335,15 +350,78 @@ class RobotPointExecutor:
             raise RuntimeError("欧拉角转四元数失败")
 
         ik_result = self.robot.inverse_kin(
-            joint_radian=current_joint,
-            pos=current_pos,
+            joint_radian=base_joint,
+            pos=target_pos,
             ori=tuple(target_ori)
         )
         if ik_result is None:
-            raise RuntimeError("姿态调整逆解失败")
+            raise RuntimeError("基于记录点位的姿态调整逆解失败")
 
-        print(f"[ADJUST_POSE_RPY] delta_rpy_deg={delta_rpy_deg}")
+        print(
+            f"[ADJUST_POSE_RPY_AT_POINT] point={name}, "
+            f"delta_rpy_deg={delta_rpy_deg}, use_recorded_pos={use_recorded_pos}"
+        )
         return self.robot.move_joint(tuple(ik_result["joint"]))
+
+    def move_to_recorded_pose_with_rpy_offset(self, name, delta_rpy_deg=(0.0, 0.0, 0.0), use_recorded_pos=True):
+        """
+        以 JSON 中记录的点位位姿作为目标位姿，
+        再在该目标姿态基础上叠加一个欧拉角增量修正。
+
+        参数：
+        - name: JSON 中记录的点位名
+        - delta_rpy_deg: 相对于该记录点位目标姿态的增量 (deg)
+        - use_recorded_pos:
+            True  -> 使用记录点位的 pos，表示“去该记录点位对应的位置和姿态”
+            False -> 使用当前位置的 pos，仅把记录点位的姿态当作目标姿态模板
+
+        说明：
+        - 记录点位的 pos / ori 被视为目标位姿本体，不再只是“参考基准”
+        - 若 delta_rpy_deg = (0,0,0)，则表示直接到记录点位位姿
+        - 逆解初值使用记录点位的 joint
+        """
+        p = self.get_point(name)
+
+        target_seed_joint = tuple(p["joint"])
+        recorded_pos = tuple(p["pos"])
+        recorded_ori = tuple(p["ori"])
+
+        if use_recorded_pos:
+            target_pos = recorded_pos
+        else:
+            current_wp = self.robot.get_current_waypoint()
+            if current_wp is None:
+                raise RuntimeError("获取当前 waypoint 失败")
+            target_pos = tuple(current_wp["pos"])
+
+        recorded_rpy_rad = self.robot.quaternion_to_rpy(recorded_ori)
+        if recorded_rpy_rad is None:
+            raise RuntimeError("记录点位四元数转欧拉角失败")
+
+        target_rpy_rad = (
+            recorded_rpy_rad[0] + math.radians(delta_rpy_deg[0]),
+            recorded_rpy_rad[1] + math.radians(delta_rpy_deg[1]),
+            recorded_rpy_rad[2] + math.radians(delta_rpy_deg[2]),
+        )
+
+        target_ori = self.robot.rpy_to_quaternion(target_rpy_rad)
+        if target_ori is None:
+            raise RuntimeError("欧拉角转四元数失败")
+
+        ik_result = self.robot.inverse_kin(
+            joint_radian=target_seed_joint,
+            pos=target_pos,
+            ori=tuple(target_ori)
+        )
+        if ik_result is None:
+            raise RuntimeError(f"目标点位 {name} 的位姿逆解失败")
+
+        print(
+            f"[MOVE_TO_RECORDED_POSE_WITH_RPY_OFFSET] "
+            f"point={name}, delta_rpy_deg={delta_rpy_deg}, use_recorded_pos={use_recorded_pos}"
+        )
+        return self.robot.move_joint(tuple(ik_result["joint"]))
+
 
     # ---------- 执行器动作后等待方式 ----------
     def actuator_then_wait_key(self, action_name="执行器动作"):
@@ -379,55 +457,99 @@ def business_template(json_path="waypoints.json", ip="localhost", port=8899):
     robot = None
     try:
         robot = connect_robot(ip, port)
-        robot.robot_startup()
+        # robot.robot_startup()
 
         # 运动参数按需调整
         robot.init_profile()
-        robot.set_joint_maxacc((0.8, 0.8, 0.8, 0.8, 0.8, 0.8))
-        robot.set_joint_maxvelc((0.8, 0.8, 0.8, 0.8, 0.8, 0.8))
+        # robot.set_joint_maxacc((0.8, 0.8, 0.8, 0.8, 0.8, 0.8))
+        # robot.set_joint_maxvelc((0.8, 0.8, 0.8, 0.8, 0.8, 0.8))
         robot.set_end_max_line_acc(0.15)
         robot.set_end_max_line_velc(0.10)
-        robot.set_end_max_angle_acc(0.20)
-        robot.set_end_max_angle_velc(0.20)
+        # robot.set_end_max_angle_acc(0.20)
+        # robot.set_end_max_angle_velc(0.20)
 
         ex = RobotPointExecutor(robot, json_path=json_path)
 
         # 1. 回到初始化点
-        ex.move_joint_to("home")
-        ex.wait(0.5)
+        ex.move_joint_to("init_2")
+        # ex.move_line_to("init_2")
+        # ex.wait(2)
 
         # 2. 按记录点位做直线运动
-        ex.move_line_to("approach_1")
-        ex.wait(0.2)
+        ex.move_line_to("waypoint_1")
+        # ex.wait(1)
 
-        # 3. 到工作点
-        ex.move_line_to("work_1")
-        ex.wait(0.2)
-
-        # 4. 当前位置姿态调整
-        ex.adjust_pose_rpy((0.0, 0.0, 15.0))
-        ex.wait(0.2)
+        ex.move_line_to("act0_fix")
 
         # 5. 执行器动作后，人工确认再继续
         ex.actuator_then_wait_key("拧紧动作（人工确认模式）")
 
-        # 6. 再移动
-        ex.move_line_to("leave_1")
-        ex.wait(0.2)
+        ex.move_line_to("waypoint_1")
+        ex.move_joint_to("init_2")
+        ex.move_joint_to("place_1")
+        # ex.wait(1)
+        ex.move_joint_to("place_2")
+        ex.move_joint_to("place_3")
+        ex.actuator_then_wait_key("释放动作（人工确认模式）")
+        ex.move_joint_to("place_2")
+        ex.move_joint_to("place_1")
+        ex.move_joint_to("init_2")
 
-        # 7. 去另一个中间点
-        ex.move_joint_to("mid_safe")
-        ex.wait(0.2)
 
-        # 8. 使用 JSON 中点位的位置 + 指定姿态，做笛卡尔目标移动
-        ex.move_cartesian_to("work_2", rpy_deg=(180.0, 0.0, 90.0))
-        ex.wait(0.2)
+        ex.move_line_to("waypoint_1")
+        ex.move_line_to("act1")
+        ex.actuator_then_wait_key("拧紧动作（人工确认模式）")
 
-        # 9. 执行器动作后，固定等待一段时间再继续
-        ex.actuator_then_wait_time(1.5, "执行器动作（固定等待模式）")
+        ex.move_line_to("waypoint_1")
+        ex.move_joint_to("init_2")
+        ex.move_joint_to("place_1")
+        # ex.wait(1)
+        ex.move_joint_to("place_2")
+        ex.move_joint_to("place_3")
+        ex.actuator_then_wait_key("释放动作（人工确认模式）")
+        ex.move_joint_to("place_2")
+        ex.move_joint_to("place_1")
+        ex.move_joint_to("init_2")
 
-        # 10. 再次移动
-        ex.move_joint_to("home")
+
+
+        ex.move_line_to("waypoint_1")
+        ex.move_line_to("act2_fix")
+        ex.actuator_then_wait_key("拧紧动作（人工确认模式）")
+
+        ex.move_line_to("waypoint_1")
+        ex.move_joint_to("init_2")
+        ex.move_joint_to("place_1")
+        # ex.wait(1)
+        ex.move_joint_to("place_2")
+        ex.move_joint_to("place_3")
+        ex.actuator_then_wait_key("释放动作（人工确认模式）")
+        ex.move_joint_to("place_2")
+        ex.move_joint_to("place_1")
+        ex.move_joint_to("init_2")
+
+        # ex.move_joint_to("init_2")
+
+        # # 5. 执行器动作后，人工确认再继续
+        # ex.actuator_then_wait_key("拧紧动作（人工确认模式）")
+
+        # # 6. 再移动
+        # ex.move_line_to("leave_1")
+        # ex.wait(0.2)
+
+        # # 7. 去另一个中间点
+        # ex.move_joint_to("mid_safe")
+        # ex.wait(0.2)
+
+        # # 8. 使用 JSON 中点位的位置 + 指定姿态，做笛卡尔目标移动
+        # ex.move_cartesian_to("work_2", rpy_deg=(180.0, 0.0, 90.0))
+        # ex.wait(0.2)
+
+        # # 9. 执行器动作后，固定等待一段时间再继续
+        # ex.actuator_then_wait_time(1.5, "执行器动作（固定等待模式）")
+
+        # # 10. 再次移动
+        # ex.move_joint_to("home")
 
     except RobotError as e:
         print(f"机械臂异常: {e}")
@@ -435,8 +557,62 @@ def business_template(json_path="waypoints.json", ip="localhost", port=8899):
         print(f"程序异常: {e}")
     finally:
         if robot is not None:
-            safe_shutdown_robot(robot)
+            # safe_shutdown_robot(robot)
+            print("end")
 
+# def place(ex):
+#     try:
+#         ex.move_line_to("waypoint_1")
+#         ex.move_joint_to("init_2")
+#         ex.move_joint_to("place_1")
+#         ex.wait(1)
+#         ex.move_joint_to("place_2")
+#         ex.move_joint_to("place_3")
+#         ex.actuator_then_wait_key("释放动作（人工确认模式）")
+#         ex.move_joint_to("place_2")
+#         ex.move_joint_to("place_1")
+#         ex.move_joint_to("init_2")
+
+
+def business_1(json_path="waypoints.json", ip="localhost", port=8899):
+    """
+    这里只给你业务模板，不做步骤列表。
+    每一步都单独调用，你后面自己改顺序即可。
+    """
+    robot = None
+    try:
+        robot = connect_robot(ip, port)
+        # robot.robot_startup()
+
+        # 运动参数按需调整
+        robot.init_profile()
+        # robot.set_joint_maxacc((0.8, 0.8, 0.8, 0.8, 0.8, 0.8))
+        # robot.set_joint_maxvelc((0.8, 0.8, 0.8, 0.8, 0.8, 0.8))
+        robot.set_end_max_line_acc(0.15)
+        robot.set_end_max_line_velc(0.10)
+        # robot.set_end_max_angle_acc(0.20)
+        # robot.set_end_max_angle_velc(0.20)
+
+        ex = RobotPointExecutor(robot, json_path=json_path)
+
+        # 1. 回到初始化点
+        # ex.move_line_to("init_2")
+        # ex.wait(2)
+        ex.move_line_to("waypoint_1")
+        ex.move_joint_to("init_2")
+        # 2. 按记录点位做直线运动
+        # ex.move_line_to("waypoint_1")
+        # ex.wait(1)
+
+
+    except RobotError as e:
+        print(f"机械臂异常: {e}")
+    except Exception as e:
+        print(f"程序异常: {e}")
+    finally:
+        if robot is not None:
+            # safe_shutdown_robot(robot)
+            print("end")
 
 # =========================
 # main
@@ -446,16 +622,19 @@ def main():
     print("请选择模式：")
     print("1. 采集点位到 JSON（追加，不覆盖）")
     print("2. 运行业务模板")
-    mode = input("输入 1 / 2: ").strip()
+    print("3. debug模版")
+    mode = input("输入 1 / 2 / 3: ").strip()
 
     json_path = input("JSON 文件名（默认 waypoints.json）: ").strip() or "waypoints.json"
-    ip = input("机械臂 IP（默认 localhost）: ").strip() or "localhost"
+    ip = input("机械臂 IP（默认 192.168.1.40）: ").strip() or "192.168.1.40"
     port = int(input("端口（默认 8899）: ").strip() or "8899")
 
     if mode == "1":
         capture_waypoints(json_path=json_path, ip=ip, port=port)
     elif mode == "2":
         business_template(json_path=json_path, ip=ip, port=port)
+    elif mode == "3":
+        business_1(json_path=json_path, ip=ip, port=port)
     else:
         print("无效模式。")
 

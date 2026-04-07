@@ -264,6 +264,7 @@ def process_arm_pose(arm_pose_file):
 
 def hand_eye_calibrate():
     rvecs, tvecs = camera_calibrate_2(N,iamges_path=iamges_path)
+    #_2会保存图片，1不会
     R_arm, t_arm = process_arm_pose(arm_pose_file=arm_pose_file)
 
     R, t = cv2.calibrateHandEye(R_arm, t_arm, rvecs, tvecs, cv2.CALIB_HAND_EYE_TSAI)
